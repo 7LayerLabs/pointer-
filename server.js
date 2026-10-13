@@ -206,6 +206,24 @@ app.get('/api/meter', (req, res) => {
   try { res.json(meterData.collect({ cwd: state.cwd, since })); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get('/meter', (req, res) => res.sendFile(path.join(__dirname, 'public', 'meter.html')));
+app.use('/vendor/hljs', express.static(path.join(__dirname, 'node_modules', '@highlightjs', 'cdn-assets')));
+
+// ---------- explorer: the project folders' files, read-only, live-updating ----------
+const workspaceRoots = () => [state.cwd, ...(state.recents || [])].filter(r => r && path.resolve(r).toLowerCase() !== path.resolve(HOME).toLowerCase());
+const workspace = require('./lib/workspace').createWorkspace({
+  roots: workspaceRoots,
+  onChange: change => broadcastWs({ type: 'fsChanged', ...change }),
+  log: slog,
+});
+const fsRoute = fn => (req, res) => {
+  Promise.resolve().then(() => fn(req.query, res)).then(out => { if (out !== undefined) res.json(out); })
+    .catch(e => res.status(e.status || (e.code === 'ENOENT' ? 404 : 500)).json({ error: e.code === 'ENOENT' ? 'That file no longer exists.' : e.message }));
+};
+app.get('/api/fs/list', fsRoute(q => workspace.list(q.root, q.rel)));
+app.get('/api/fs/read', fsRoute(q => workspace.read(q.root, q.rel)));
+app.get('/api/fs/all', fsRoute(q => workspace.all(q.root)));
+app.get('/api/fs/git', fsRoute(q => workspace.git(q.root)));
+app.get('/api/fs/raw', fsRoute((q, res) => { const { file, type } = workspace.raw(q.root, q.rel); res.type(type); res.sendFile(file); }));
 
 // Localhost only. HTTP and WebSocket clients must authenticate to this launch.
 const server = app.listen(PORT, '127.0.0.1', () => {
@@ -971,6 +989,7 @@ function spawnSavedPanes() {
   }
 }
 if(!process.env.VIBEDECK_NO_PANES && !needsFolder()) spawnSavedPanes();
+if (!needsFolder()) workspace.watch(state.cwd);
 
 // "-> sidecar": file a pane's last answer into Sidecar (localhost:3010) as a formatted doc.
 function pushToSidecar(fromId) {
@@ -992,7 +1011,7 @@ wss.on('connection', (ws) => {
   ws.send(JSON.stringify({
     type: 'init',
     customDefinitions, customStatus, connections:connections.list(), secureKeyStorage:!!process.env.VIBEDECK_VAULT,
-    templates: readTemplates(), runs: readRuns(), desktop: !!process.send, home: HOME, needsFolder: needsFolder(),
+    templates: readTemplates(), runs: readRuns(), desktop: !!process.send, platform: process.platform, home: HOME, needsFolder: needsFolder(),
     version: require('./package.json').version,
     panes: [...sessions.keys()].map(paneInfo),
     roster: ROSTER.map(r => ({ id: r.id, label: r.label, hasYolo: false, flags: '' })),
@@ -1121,6 +1140,31 @@ wss.on('connection', (ws) => {
       // quoted when the path has spaces, or the CLI reads it as two words and never attaches it
       s.proc.write((/\s/.test(file) ? `"${file}"` : file) + ' ');
       broadcastWs({ type: 'imageSaved', pane: msg.pane, file: path.basename(file) });
+    } else if (msg.type === 'typePath' && s && s.alive && s.proc) {
+      // a file from the explorer, dropped on a pane or sent from its menu: type its path into the CLI.
+      // Relative inside the project folder (the CLIs work there), absolute for other workspaces.
+      let target;
+      try { target = workspace.resolveIn(msg.root, msg.rel).target; } catch (e) { return notice(e.message); }
+      const inCwd = (target + path.sep).toLowerCase().startsWith((path.resolve(state.cwd) + path.sep).toLowerCase());
+      const shown = inCwd ? (path.relative(state.cwd, target) || '.').split(path.sep).join('/') : target;
+      s.proc.write((/\s/.test(shown) ? `"${shown}"` : shown) + ' ');
+      reply({ type: 'pathTyped', pane: msg.pane, path: shown });
+    } else if (msg.type === 'forgetRecent') {
+      const dir = String(msg.dir || '');
+      if (!dir || dir.toLowerCase() === String(state.cwd).toLowerCase()) return;
+      state.recents = state.recents.filter(r => r.toLowerCase() !== dir.toLowerCase());
+      saveState();
+      broadcastWs({ type: 'recents', recents: state.recents });
+    } else if (msg.type === 'addWorkspace') {
+      // list a folder in the sidebar without moving the panes there
+      let dir = String(msg.dir || '').trim().replace(/^"|"$/g, '');
+      try { if (!fs.statSync(dir).isDirectory()) throw 0; } catch { return notice(`That folder does not exist: ${dir}`); }
+      dir = path.resolve(dir);
+      if (dir.toLowerCase() === path.resolve(HOME).toLowerCase()) return notice('Pick a project folder, not your whole user folder.');
+      const rest = state.recents.filter(r => r.toLowerCase() !== dir.toLowerCase() && r.toLowerCase() !== String(state.cwd).toLowerCase());
+      state.recents = [state.cwd, dir, ...rest].filter(Boolean).slice(0, 10);
+      saveState();
+      broadcastWs({ type: 'recents', recents: state.recents });
     } else if (msg.type === 'broadcast') {
       if(!Array.isArray(msg.targets)||typeof msg.data!=='string'||!msg.data.trim()||msg.data.length>32000)return;
       if(lastRound?.pending?.size)return notice('Wait for the current round to finish, or stop it first.');
@@ -1196,7 +1240,7 @@ wss.on('connection', (ws) => {
       dir = path.resolve(dir);
       if (dir.toLowerCase() === path.resolve(HOME).toLowerCase()) return notice('Pick a project folder, not your whole user folder.');
       state.cwd = dir;
-      state.recents = [dir, ...state.recents.filter(r => r.toLowerCase() !== dir.toLowerCase())].slice(0, 8);
+      state.recents = [dir, ...state.recents.filter(r => r.toLowerCase() !== dir.toLowerCase())].slice(0, 10);
       // relaunch every pane in the new project dir
       for (const [id, sess] of [...sessions]) {
         const order = [...sessions.keys()];
@@ -1207,6 +1251,7 @@ wss.on('connection', (ws) => {
       }
       if (!sessions.size && !process.env.VIBEDECK_NO_PANES) spawnSavedPanes();
       saveState();
+      workspace.watch(state.cwd);
       broadcastWs({ type: 'cwdChanged', cwd: state.cwd, recents: state.recents, needsFolder: needsFolder() });
       // every pane is a fresh session now: clear "ended" covers and old waiting cards
       for (const id of sessions.keys()) broadcastWs({ type: 'restarted', pane: id, info: paneInfo(id) });

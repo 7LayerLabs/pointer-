@@ -23,9 +23,12 @@ function chipTitle(p) {
   const verified = p.ran ? ` Last answer verified from ${kindName(p.kind)}'s log: ${ranLabel(p.kind, p.ran)}.` : '';
   return `Model and effort: ${chipText(p)}.${verified} Click to change.`;
 }
+// a calm, low-glare palette: the CLIs' own colors read clearly without the stock neon
 const THEME = {
-  background: '#0e1118', foreground: '#d4d9e3', cursor: '#ffd400', cursorAccent: '#0e1118',
-  selectionBackground: '#ffd40040', black: '#0e1118', brightBlack: '#626a7c',
+  background: '#0b0c0f', foreground: '#d5d7de', cursor: '#ffd400', cursorAccent: '#0b0c0f',
+  selectionBackground: '#ffd40033', selectionInactiveBackground: '#ffffff1a',
+  black: '#17191f', red: '#ef7b73', green: '#8fd19e', yellow: '#e8c47c', blue: '#7fa6f5', magenta: '#c4a1f0', cyan: '#71c4d3', white: '#c9cbd3',
+  brightBlack: '#5b5f6b', brightRed: '#ff968f', brightGreen: '#a9e2b6', brightYellow: '#f4d596', brightBlue: '#9dbcff', brightMagenta: '#d8bdff', brightCyan: '#90d8e5', brightWhite: '#f3f4f7',
 };
 
 const svg = d => `<svg class="i" viewBox="0 0 24 24">${d}</svg>`;
@@ -74,6 +77,8 @@ const PROMOTE_HEAD = 'Continue from the winning answer below.';
 const openCards = new Set(); // note ids the user expanded, survives rerenders
 
 const $ = id => document.getElementById(id);
+const FILE_DRAG = 'application/x-vibedeck-file';
+const folderName = dir => { const parts = String(dir || '').split(/[\\/]/).filter(Boolean); return parts[parts.length - 1] || dir || ''; };
 const promptEl = $('prompt'), panesEl = $('panes');
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function send(msg) { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); }
@@ -147,10 +152,11 @@ function buildPane(info) {
     <header class="pane-head">
       <span class="dot"></span>
       <span class="pname">${esc(kindName(info.kind))}</span><span class="inst"></span>
+      <span class="pdir"></span>
       <button class="modelchip" title="Model and effort for this pane" hidden><span></span>${ICONS.chev}</button>
       <span class="pstate"></span>
       <span class="grow"></span>
-      <button class="bcast" title="Include this pane when you broadcast">${ICONS.radio}<span>Broadcast on</span></button>
+      <button class="bcast" title="Include this pane when you broadcast">${ICONS.radio}<span>Broadcast</span></button>
       <button class="iconbtn more" title="Pane actions">${ICONS.more}</button>
     </header>
     ${isNotes
@@ -167,13 +173,14 @@ function buildPane(info) {
       <button class="btn dead-rs">${ICONS.restart}Restart ${esc(kindName(info.kind))}</button>
     </div>`;
   panesEl.appendChild(el);
+  el.querySelector('.pdir').textContent = needsFolder ? '' : folderName(cwd);
 
   const pane = { el, id: info.id, kind: info.kind, label: info.label, dead: false, broadcast: !isNotes, busySince: 0, ran: info.ran || '', mismatch: !!info.mismatch, model: info.model || '', effort: info.effort || '' };
   const bcBtn = el.querySelector('.bcast');
   const setBroadcast = on => {
     pane.broadcast = on;
     bcBtn.classList.toggle('on', on);
-    bcBtn.querySelector('span').textContent = on ? 'Broadcast on' : 'Broadcast off';
+    bcBtn.title = on ? 'Broadcast is on: this pane gets every prompt you send. Click to turn it off.' : 'Broadcast is off: this pane is skipped when you send. Click to turn it on.';
     renderTargets();
   };
   pane.setBroadcast = setBroadcast;
@@ -214,8 +221,8 @@ function buildPane(info) {
   }
 
   const term = new Terminal({
-    theme: THEME, fontSize: 12.5, lineHeight: 1.2,
-    fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
+    theme: THEME, fontSize: 12.5, lineHeight: 1.22,
+    fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace', fontWeight: 400, fontWeightBold: 600,
     cursorBlink: true, scrollback: 8000, allowProposedApi: true,
   });
   const fit = new FitAddon.FitAddon();
@@ -255,9 +262,15 @@ function buildPane(info) {
     rd.readAsDataURL(file);
     return true;
   };
+  // a file dragged from the sidebar arrives as a workspace path: the server types it into the CLI
   el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('dropping'); });
   el.addEventListener('dragleave', () => el.classList.remove('dropping'));
-  el.addEventListener('drop', e => { e.preventDefault(); el.classList.remove('dropping'); [...(e.dataTransfer?.files || [])].forEach(sendImage); });
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('dropping');
+    const ref = e.dataTransfer?.getData(FILE_DRAG);
+    if (ref) { try { const f = JSON.parse(ref); send({ type: 'typePath', pane: info.id, root: f.root, rel: f.rel }); term.focus(); } catch {} return; }
+    [...(e.dataTransfer?.files || [])].forEach(sendImage);
+  });
   term.textarea.addEventListener('paste', e => {
     const img = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
     if (img && sendImage(img.getAsFile())) { e.preventDefault(); e.stopImmediatePropagation(); }
@@ -493,6 +506,19 @@ setInterval(() => panes.forEach(p => {
 function setRoundActive(on) {
   roundActive = on;
   $('stopRoundBtn').hidden = !on;
+  $('sbRound').hidden = !on;
+}
+// drop text into the prompt at the caret, with a space on either side when needed
+function insertIntoPrompt(text) {
+  window.dispatchEvent(new CustomEvent('vd:view', { detail: 'workbench' }));
+  const v = promptEl.value, a = promptEl.selectionStart ?? v.length, b = promptEl.selectionEnd ?? v.length;
+  const before = v.slice(0, a), after = v.slice(b);
+  const ins = (before && !/\s$/.test(before) ? ' ' : '') + text + (after && /^\s/.test(after) ? '' : ' ');
+  promptEl.value = before + ins + after;
+  sizePrompt();
+  promptEl.focus();
+  const at = before.length + ins.length;
+  promptEl.setSelectionRange(at, at);
 }
 
 // ---------- websocket ----------
@@ -626,7 +652,12 @@ ws.addEventListener('message', ev => {
   } else if (msg.type === 'cwdError') {
     toast(msg.text || 'That folder does not exist.', 'folder', true);
   } else if (msg.type === 'folderPicked') {
-    if (msg.dir) send({ type: 'setcwd', dir: msg.dir });
+    if (msg.dir) send({ type: pickMode === 'add' ? 'addWorkspace' : 'setcwd', dir: msg.dir });
+  } else if (msg.type === 'recents') {
+    setCwd(cwd, msg.recents || [], needsFolder);
+  } else if (msg.type === 'pathTyped') {
+    const p = panes.get(msg.pane);
+    toast(`${msg.path} typed into ${p ? paneTitle(p) : 'the pane'}`, 'arrow');
   }
 });
 ws.addEventListener('close', () => {
@@ -640,11 +671,8 @@ ws.addEventListener('close', () => {
 function setCwd(dir, rec, gate) {
   cwd = dir; recents = rec || [];
   needsFolder = !!gate;
-  const parts = dir.split(/[\\/]/).filter(Boolean);
-  $('cwdName').textContent = needsFolder ? 'No project folder' : (parts[parts.length - 1] || dir || 'Folder');
-  $('cwdPath').textContent = needsFolder ? 'Choose one to start' : dir;
+  panes.forEach(p => { const d = p.el.querySelector('.pdir'); if (d) d.textContent = needsFolder ? '' : folderName(dir); });
   $('cwdBtn').classList.toggle('warn', needsFolder);
-  $('cwdBtn').title = needsFolder ? 'Choose a project folder' : `Project folder: ${dir}`;
   $('cwdCur').textContent = needsFolder ? 'None chosen yet' : dir;
   const list = recents.filter(r => r !== dir && r.toLowerCase() !== home.toLowerCase()).slice(0, 7);
   for (const box of [$('cwdRecents'), $('gateRecents')]) {
@@ -669,7 +697,7 @@ function toggleCwdPanel(open) {
   $('cwdBtn').classList.toggle('open', open);
   if (!open) return;
   const r = $('cwdBtn').getBoundingClientRect();
-  panel.style.left = r.left + 'px';
+  panel.style.left = Math.max(8, Math.min(window.innerWidth - panel.offsetWidth - 8, r.left)) + 'px';
   panel.style.top = (r.bottom + 6) + 'px';
   $('cwdInput').value = '';
   $('cwdInput').focus();
@@ -677,11 +705,13 @@ function toggleCwdPanel(open) {
 $('cwdBtn').addEventListener('click', e => { e.stopPropagation(); toggleCwdPanel($('cwdPanel').hidden); });
 document.addEventListener('mousedown', e => { if (!$('cwdPanel').hidden && !$('cwdPanel').contains(e.target) && !$('cwdBtn').contains(e.target)) toggleCwdPanel(false); });
 const goCwd = input => { const d = input.value.trim(); if (d) send({ type: 'setcwd', dir: d }); };
+let pickMode = 'open';
 $('cwdGo').addEventListener('click', () => goCwd($('cwdInput')));
+$('cwdAdd').addEventListener('click', () => { const d = $('cwdInput').value.trim(); if (d) { send({ type: 'addWorkspace', dir: d }); toggleCwdPanel(false); } });
 $('cwdInput').addEventListener('keydown', e => { if (e.key === 'Enter') goCwd($('cwdInput')); });
 $('gateGo').addEventListener('click', () => goCwd($('gateInput')));
 $('gateInput').addEventListener('keydown', e => { if (e.key === 'Enter') goCwd($('gateInput')); });
-const browse = () => { toggleCwdPanel(false); send({ type: 'pickFolder' }); };
+const browse = () => { toggleCwdPanel(false); pickMode = 'open'; send({ type: 'pickFolder' }); };
 $('cwdBrowse').addEventListener('click', browse);
 $('gateBrowse').addEventListener('click', browse);
 
@@ -793,7 +823,7 @@ function renderCompare(round) {
 // ---------- prompt (Enter sends, Shift+Enter = new line) ----------
 function sizePrompt() {
   promptEl.style.height = 'auto';
-  promptEl.style.height = Math.min(Math.max(promptEl.scrollHeight, 44), 180) + 'px';
+  promptEl.style.height = Math.min(Math.max(promptEl.scrollHeight, 22), 180) + 'px';
 }
 function broadcastPrompt() {
   const text = promptEl.value;

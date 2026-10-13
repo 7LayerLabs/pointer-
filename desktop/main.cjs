@@ -45,7 +45,12 @@ app.whenReady().then(()=>{
     }
     if(message.type!=='ready'||ready)return;ready=true;clearTimeout(timer);
     const origin=new URL(message.url).origin;
-    window=new BrowserWindow({width:1440,height:960,minWidth:860,minHeight:640,title:'VibeDeck',backgroundColor:'#0b0d12',icon:path.join(app.getAppPath(),'icon.png'),show:false,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}});
+    // The page draws its own title bar; Windows and Linux keep native window buttons drawn over it,
+    // macOS keeps its traffic lights inset into it.
+    const chrome=process.platform==='darwin'
+      ?{titleBarStyle:'hiddenInset',trafficLightPosition:{x:14,y:13}}
+      :{titleBarStyle:'hidden',titleBarOverlay:{color:'#08090b',symbolColor:'#9a9ea9',height:40}};
+    window=new BrowserWindow({width:1440,height:960,minWidth:960,minHeight:640,title:'VibeDeck',backgroundColor:'#08090b',icon:path.join(app.getAppPath(),'icon.png'),show:false,...chrome,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}});
     window.removeMenu();
     window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
     window.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==origin)event.preventDefault();});

@@ -1,4 +1,4 @@
-// App shell: page switching, sidebar provider status, and the "choose a folder" gate.
+// App shell: page switching, the sidebar frame, status bar provider meters, and the "choose a folder" gate.
 (() => {
   const VIEWS = { workbench: 'Workbench', pipelines: 'Pipelines', history: 'History', connections: 'Connections' };
   let current = 'workbench';
@@ -9,7 +9,7 @@
     current = name;
     for (const v of Object.keys(VIEWS)) $('view-' + v).hidden = v !== name;
     document.querySelectorAll('.nav[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === name));
-    $('crumbTitle').textContent = VIEWS[name];
+    document.title = name === 'workbench' ? 'VibeDeck' : `${VIEWS[name]} | VibeDeck`;
     $('wbTools').hidden = name !== 'workbench' || needsFolder;
     store('vibedeck-view', name);
     closeMenus();
@@ -26,6 +26,7 @@
     $('composer').hidden = gate;
     $('wbTools').hidden = current !== 'workbench' || gate;
     $('crumbPath').textContent = gate ? 'No project folder' : e.detail.cwd;
+    $('crumbPath').title = gate ? '' : e.detail.cwd;
     if (!gate) setTimeout(fitAll, 30);
   });
 
@@ -55,19 +56,56 @@
   }
   window.vdUsageHtml = usageHtml;
 
+  // the status bar's short form: the tightest plan limit, or Grok's spend today
+  function usageShort(kind) {
+    const u = usage[kind];
+    if (kind === 'grok') return u ? { text: money(u.today.cost), pct: u.busiestCost > 0 ? (u.today.cost / u.busiestCost) * 100 : 0, title: `${tokens(u.today.tokens)} tokens, ${money(u.today.cost)} today` } : null;
+    if (!u || !u.windows?.length) return null;
+    const w = u.windows.reduce((a, b) => (b.pct > a.pct ? b : a));
+    return { text: `${w.pct}%`, pct: w.pct, title: `${w.pct}% of your ${w.label} limit used${w.resets ? `, resets ${w.resets}` : ''}` };
+  }
   function renderProviders() {
-    $('provList').innerHTML = health.map(h => `
-      <button class="prov" data-kind="${esc(h.id)}" title="${h.ok ? esc(kindName(h.id) + ' CLI ' + (h.version || 'installed')) : esc(INSTALL[h.id] || 'Not installed')}">
-        <span class="prov-top"><span class="pdot ${h.ok ? '' : 'off'}"></span>${esc(kindName(h.id))}
-        <span class="s">${h.ok ? (h.version ? 'v' + esc(h.version) : 'Ready') : 'Missing'}</span></span>
-        ${h.ok ? `<span class="prov-meter" style="--kind:${color(h.id)}">${usageHtml(h.id, false)}</span>` : ''}
-      </button>`).join('');
+    $('provList').innerHTML = health.map(h => {
+      const u = h.ok ? usageShort(h.id) : null;
+      const title = !h.ok ? `${kindName(h.id)} is not installed. ${INSTALL[h.id] || ''}`
+        : `${kindName(h.id)} CLI${h.version ? ' v' + h.version : ''}${u ? '. ' + u.title : ''}. Click for details.`;
+      return `<button class="sb-item prov ${h.ok ? '' : 'off'} ${u ? level(u.pct) : ''}" data-kind="${esc(h.id)}" title="${esc(title)}" style="--kind:${color(h.id)}">
+        <span class="pdot"></span>${esc(kindName(h.id))}${u ? `<span class="sb-meter"><span style="width:${Math.max(4, Math.min(100, u.pct))}%"></span></span><span class="sb-num">${esc(u.text)}</span>` : h.ok ? '' : '<span class="sb-num">Missing</span>'}
+      </button>`;
+    }).join('');
   }
   $('provList').addEventListener('click', e => { if (e.target.closest('.prov')) setView('connections'); });
+
+  // ---------- sidebar frame: show/hide (Ctrl+B) and drag to resize ----------
+  const RAIL_W = 'vibedeck-rail-w', RAIL_OFF = 'vibedeck-rail-off', RAIL_DEFAULT = 272;
+  const appEl = document.querySelector('.app');
+  const setRailWidth = w => appEl.style.setProperty('--rail-w', Math.max(200, Math.min(520, w)) + 'px');
+  setRailWidth(Number(load(RAIL_W)) || RAIL_DEFAULT);
+  const setRail = on => { appEl.classList.toggle('rail-off', !on); $('railToggle').classList.toggle('on', on); store(RAIL_OFF, on ? '0' : '1'); setTimeout(fitAll, 30); };
+  setRail(load(RAIL_OFF) !== '1');
+  $('railToggle').addEventListener('click', () => setRail(appEl.classList.contains('rail-off')));
+  window.addEventListener('vd:toggleRail', () => setRail(appEl.classList.contains('rail-off')));
+  const grip = $('railResize');
+  grip.addEventListener('dblclick', () => { setRailWidth(RAIL_DEFAULT); store(RAIL_W, String(RAIL_DEFAULT)); setTimeout(fitAll, 30); });
+  grip.addEventListener('mousedown', e => {
+    e.preventDefault();
+    grip.classList.add('active'); document.body.classList.add('resizing');
+    const x0 = e.clientX, w0 = $('rail').offsetWidth;
+    const move = ev => setRailWidth(w0 + ev.clientX - x0);
+    const up = () => {
+      grip.classList.remove('active'); document.body.classList.remove('resizing');
+      document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+      store(RAIL_W, String($('rail').offsetWidth)); fitAll();
+    };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  });
 
   ws.addEventListener('message', ev => {
     const msg = JSON.parse(ev.data);
     if (msg.type === 'init') {
+      // the desktop app draws its own title bar; leave room for the native window buttons
+      document.body.classList.toggle('framed', !!msg.desktop);
+      document.body.classList.toggle('mac', msg.platform === 'darwin');
       health = msg.health || [];
       usage = msg.usage || {};
       renderProviders();
