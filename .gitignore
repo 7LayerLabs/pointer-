@@ -7,3 +7,6 @@ models.json
 
 dist/
 release-checks/
+
+# local research notes, not for the public repo
+docs/cursor-teardown/

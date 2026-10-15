@@ -29,6 +29,14 @@ Pick a project folder. Terminals and pipelines only start inside a real project 
 - Compare shows every answer from the last round side by side, labeled with the model that wrote it. Pick a winner, continue from an answer, or ask a blind AI judge.
 - CLIs start with a clean environment: variables from a parent Claude Code session (`CLAUDECODE`, `CLAUDE_CODE_*`) and Electron's `ELECTRON_RUN_AS_NODE` are removed, so launching VibeDeck from inside Claude Code doesn't change how the panes behave.
 
+## Review and checkpoints
+
+- VibeDeck saves a checkpoint of the project folder when it opens, and again before every broadcast, relay, pipeline run and prompt typed straight into an AI pane. Checkpoints live in a private git repository in VibeDeck's data folder (`data/checkpoints`). The project's own `.git`, branches and history are never touched, and folders that are not git repos work the same way.
+- The Review page lists every file changed since the last reviewed checkpoint, with +/- counts, and shows each file as red and green blocks. Each block has Keep and Undo. Keep accepts it; Undo writes the old lines back to disk. Keep all, Undo all, Keep file and Undo file cover bigger steps.
+- The checkpoint timeline can review everything since any checkpoint, or Rewind the whole project to it. Undo and Rewind save a checkpoint first, so they can be reversed too.
+- Keys on the Review page: J and K move between changes, Shift+J and Shift+K between files, Y keeps, N undoes, Ctrl+Enter keeps everything.
+- Left out of checkpoints: anything the project's `.gitignore` ignores (so `.env` files), generated folders such as `node_modules`, `dist`, `build` and `.next`, and large media and archive files.
+
 ## Pipelines
 
 Build a chain of one to eight stages. Each stage picks a role, a provider, a model and effort (named as each CLI names them, like "Opus 5.5" or "GPT-6-Sol"), and optional instructions. Every finished stage shows the model the CLI reported actually running on, and flags it if that differs from the pick.

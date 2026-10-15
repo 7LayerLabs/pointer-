@@ -225,6 +225,40 @@ app.get('/api/fs/all', fsRoute(q => workspace.all(q.root)));
 app.get('/api/fs/git', fsRoute(q => workspace.git(q.root)));
 app.get('/api/fs/raw', fsRoute((q, res) => { const { file, type } = workspace.raw(q.root, q.rel); res.type(type); res.sendFile(file); }));
 
+// ---------- checkpoints + review: a snapshot before every round, so agent edits can be kept, undone or rewound ----------
+const checkpoints = require('./lib/checkpoints').createCheckpoints({ dataDir: DATA_DIR, log: slog });
+const KIND_LABEL = { round: 'Before broadcast', relay: 'Before relay', pipeline: 'Before pipeline', typed: 'Before typed prompt', manual: 'Saved by you' };
+// snapshot the project folder; resolves within 20s either way so a slow disk never blocks a prompt
+function checkpointBefore(kind, prompt, label) {
+  if (needsFolder()) return Promise.resolve(null);
+  const dir = state.cwd;
+  const work = checkpoints.snapshot(dir, { kind, label: label || KIND_LABEL[kind] || 'Checkpoint', prompt: prompt || '' })
+    .then(cp => { if (cp.created) broadcastWs({ type: 'checkpoint', cwd: dir, cp: { id: cp.id, ts: cp.ts, kind: cp.kind, label: cp.label, prompt: cp.prompt } }); return cp; })
+    .catch(e => { slog(`checkpoint failed: ${e.message}`); return null; });
+  return Promise.race([work, new Promise(r => setTimeout(() => r(null), 20000))]);
+}
+const cpRoute = (fn, { mutates } = {}) => (req, res) => {
+  Promise.resolve().then(() => {
+    if (needsFolder()) throw Object.assign(Error('Choose a project folder first.'), { status: 400 });
+    if (mutates && (lastRound?.pending?.size || customRunner.active) && req.path.endsWith('/rewind')) throw Object.assign(Error('Wait for the agents to finish before rewinding.'), { status: 409 });
+    return fn({ ...req.query, ...(req.body || {}) }, state.cwd);
+  }).then(out => {
+    if (mutates) broadcastWs({ type: 'reviewChanged', cwd: state.cwd });
+    res.json(out ?? { ok: true });
+  }).catch(e => res.status(e.status || 500).json({ error: e.message }));
+};
+const cpJson = express.json({ limit: '12mb' });
+app.get('/api/cp/list', cpRoute((q, dir) => checkpoints.list(dir)));
+app.get('/api/cp/changes', cpRoute((q, dir) => checkpoints.changes(dir)));
+app.get('/api/cp/file', cpRoute((q, dir) => checkpoints.file(dir, String(q.rel || ''))));
+app.post('/api/cp/save', cpJson, cpRoute((q, dir) => checkpointBefore('manual', '', String(q.label || '').slice(0, 80) || undefined), { mutates: true }));
+app.post('/api/cp/keep', cpJson, cpRoute((q, dir) => checkpoints.keep(dir, { rel: String(q.rel || ''), text: q.text, whole: !!q.whole }), { mutates: true }));
+app.post('/api/cp/keepAll', cpJson, cpRoute((q, dir) => checkpoints.keepAll(dir), { mutates: true }));
+app.post('/api/cp/undo', cpJson, cpRoute((q, dir) => checkpoints.undo(dir, { rel: String(q.rel || ''), text: q.text, whole: !!q.whole, expect: q.expect }), { mutates: true }));
+app.post('/api/cp/undoAll', cpJson, cpRoute((q, dir) => checkpoints.undoAll(dir), { mutates: true }));
+app.post('/api/cp/rewind', cpJson, cpRoute((q, dir) => checkpoints.rewind(dir, String(q.id || '')), { mutates: true }));
+app.post('/api/cp/reviewFrom', cpJson, cpRoute((q, dir) => checkpoints.reviewFrom(dir, String(q.id || '')), { mutates: true }));
+
 // Localhost only. HTTP and WebSocket clients must authenticate to this launch.
 const server = app.listen(PORT, '127.0.0.1', () => {
   const url = `http://127.0.0.1:${server.address().port}/session?token=${sessionToken}`;
@@ -990,6 +1024,8 @@ function spawnSavedPanes() {
 }
 if(!process.env.VIBEDECK_NO_PANES && !needsFolder()) spawnSavedPanes();
 if (!needsFolder()) workspace.watch(state.cwd);
+// a starting point for Review, so even edits made before the first prompt can be undone
+checkpointBefore('open', '', 'Opened in VibeDeck');
 
 // "-> sidecar": file a pane's last answer into Sidecar (localhost:3010) as a formatted doc.
 function pushToSidecar(fromId) {
@@ -1109,7 +1145,10 @@ wss.on('connection', (ws) => {
           const missing=(msg.definition?.steps||[]).find(step=>step.kind!=='api' && HEALTH.find(h=>h.id===step.kind) && !HEALTH.find(h=>h.id===step.kind).ok);
           if(missing)throw Error(`The ${missing.kind} CLI is not installed. Install it or pick another provider for that stage.`);
           try { runSnapshot=filesLib.snapshot(state.cwd); } catch { runSnapshot=null; }
-          customRunner.start(msg.definition,msg.prompt,state.cwd,{autoApprove:!!msg.autoApprove,handsFree:!!msg.handsFree});
+          checkpointBefore('pipeline',msg.prompt,`Before ${String(msg.definition?.name||'pipeline').slice(0,60)}`).then(()=>{
+            try { customRunner.start(msg.definition,msg.prompt,state.cwd,{autoApprove:!!msg.autoApprove,handsFree:!!msg.handsFree}); }
+            catch(e){ reply({type:'customPipelineError',text:e.message}); }
+          });
         }
         else if(msg.type==='customPipelineResume')customRunner.resume({note:msg.note,editedOutput:msg.editedOutput});
         else if(msg.type==='customPipelineRetry')customRunner.retry({note:msg.note});
@@ -1124,6 +1163,12 @@ wss.on('connection', (ws) => {
     if(customRunner.active && ['broadcast','relay','setcwd','replace'].includes(msg.type))return notice('A pipeline is running in this folder. Stop it or let it finish first.');
 
     if (msg.type === 'input' && s && s.alive && s.proc) {
+      // Enter typed straight into an AI pane: snapshot too (at most every 20s), so Review covers it
+      if (['claude', 'codex', 'grok'].includes(s.kind) && !s.inRound && typeof msg.data === 'string' && msg.data.includes('\r')
+          && Date.now() - (s.lastTypedCp || 0) > 20000 && !questionOnScreen(s)) {
+        s.lastTypedCp = Date.now();
+        checkpointBefore('typed', '', `Before typed prompt to ${kindOf(s.kind).label}`);
+      }
       s.proc.write(msg.data);
     } else if (msg.type === 'image' && s && s.alive && s.proc) {
       // pasted/dropped image: save to disk, type the path into the CLI's input
@@ -1176,14 +1221,19 @@ wss.on('connection', (ws) => {
       if (!msg.noHist) appendHistory(lastRound.ts, msg.data);
       // note every log file's size now, so any growth during this round is seen (see lib/transcripts.js)
       for (const k of new Set(targets.map(id => sessions.get(id).kind))) { try { primeLogs(k, state.cwd); } catch {} }
-      for (const id of targets) {
-        const t = sessions.get(id);
-        t.roundOut = '';
-        t.inRound = true;
-        if (isReady(t)) writePrompt(t, msg.data);
-        else t.queue.push({ text: msg.data, ts: Date.now() });
-      }
+      for (const id of targets) { const t = sessions.get(id); t.roundOut = ''; t.inRound = true; }
       broadcastWs({ type: 'roundStarted', ts: lastRound.ts, targets });
+      // the prompt goes out once the project is snapshotted, so Review can show exactly what this round changed
+      const round = lastRound;
+      checkpointBefore('round', msg.data).then(() => {
+        if (lastRound !== round || !round.pending.size) return; // stopped while snapshotting
+        for (const id of targets) {
+          const t = sessions.get(id);
+          if (!t?.alive || !round.pending.has(id)) continue;
+          if (isReady(t)) writePrompt(t, msg.data);
+          else t.queue.push({ text: msg.data, ts: Date.now() });
+        }
+      });
     } else if (msg.type === 'relay' && s) {
       const to = sessions.get(msg.to);
       if (!to || !to.alive || !to.proc) return;
@@ -1193,9 +1243,12 @@ wss.on('connection', (ws) => {
       const text = `Here is output from another AI assistant (${fromLabel}). Use it as context and act on it:\n\n${src}`.replace(/\r?\n/g, '\n');
       to.roundOut = '';
       to.inRound = true;
-      if (isReady(to)) writePrompt(to, text);
-      else to.queue.push({ text, ts: Date.now() });
       broadcastWs({ type: 'relayed', from: msg.pane, to: msg.to });
+      checkpointBefore('relay', `${fromLabel} to ${kindOf(to.kind).label}`).then(() => {
+        if (!to.alive) return;
+        if (isReady(to)) writePrompt(to, text);
+        else to.queue.push({ text, ts: Date.now() });
+      });
     } else if (msg.type === 'round') {
       ws.send(JSON.stringify({ type: 'round', prompt: lastRound?.prompt || '', ts: lastRound?.ts || 0, responses: roundResponses() }));
     } else if (msg.type === 'judge') {
@@ -1252,6 +1305,7 @@ wss.on('connection', (ws) => {
       if (!sessions.size && !process.env.VIBEDECK_NO_PANES) spawnSavedPanes();
       saveState();
       workspace.watch(state.cwd);
+      checkpointBefore('open', '', 'Opened in VibeDeck');
       broadcastWs({ type: 'cwdChanged', cwd: state.cwd, recents: state.recents, needsFolder: needsFolder() });
       // every pane is a fresh session now: clear "ended" covers and old waiting cards
       for (const id of sessions.keys()) broadcastWs({ type: 'restarted', pane: id, info: paneInfo(id) });

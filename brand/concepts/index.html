@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VibeDeck Logo Concepts</title>
+<style>
+@font-face{font-family:Inter;src:url('../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2');font-weight:100 900}
+:root{--bg:#08090b;--card:#101115;--line:#1d1f25;--text:#e8e9ed;--dim:#7f838e;--accent:#ffd400}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--text);font:14px/1.5 Inter,system-ui,sans-serif;padding:40px 32px 60px;-webkit-font-smoothing:antialiased}
+header{max-width:1180px;margin:0 auto 28px}
+.eyebrow{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:600}
+h1{font-size:28px;letter-spacing:-.02em;margin-top:4px}
+header p{color:var(--dim);margin-top:6px;max-width:680px}
+.grid{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:18px}
+.c.cur{opacity:.75}
+.top{display:flex;gap:22px;align-items:center}
+.top img.big{width:168px;height:168px;flex:none}
+.tag{font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.06em}
+.c h2{font-size:20px;letter-spacing:-.01em;margin:2px 0 6px}
+.c p{color:var(--dim);font-size:13.5px}
+.sizes{display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:#0b0c0f}
+.sizes figure{display:flex;flex-direction:column;align-items:center;gap:6px}
+.sizes figcaption{font-size:10.5px;color:var(--dim)}
+.lock{display:flex;gap:10px}
+.lu{flex:1;display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:10px;border:1px solid var(--line)}
+.lu img{width:34px;height:34px}
+.lu span{font-size:21px;font-weight:700;letter-spacing:-.03em}
+.lu span i{font-style:normal;color:#8a8f9c}
+.lu.light{background:#f4f4f1;border-color:#e2e2dc}
+.lu.light span{color:#111318}
+.lu.light span i{color:#6b6f7a}
+.task{display:flex;gap:6px;align-items:center;background:#1c1d22;border-radius:8px;padding:6px 10px;width:max-content}
+.task img{width:24px;height:24px}
+.task b{font-weight:500;font-size:12px;color:#c9cbd3;margin-left:4px}
+@media (max-width:860px){.grid{grid-template-columns:1fr}.top{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">VibeDeck brand</div>
+  <h1>Four logo directions</h1>
+  <p>All four use the app's Night Shift colors: graphite with one yellow accent. Each one is shown big, at real icon sizes down to 16 pixels (the size in a browser tab), as a taskbar icon, and next to the name.</p>
+</header>
+<div class="grid" id="grid"></div>
+<script>
+const C = [
+  ['a-stack.svg', 'A', 'Stack', 'A deck of terminal windows, the front one yellow with a prompt on it. Says "many agents, one prompt" in one shape. Reads well big; at 16 pixels it becomes a yellow card.'],
+  ['b-fanout.svg', 'B', 'Fan-out', 'One prompt caret going out to three agents. The simplest mark, and the sharpest at tiny sizes. Most "developer tool" of the four.'],
+  ['c-monogram.svg', 'C', 'Monogram', 'A bold D for Deck with the prompt caret inside it. Most like a real company logo, and it works without the name next to it.'],
+  ['d-panes.svg', 'D', 'Panes, refined', 'Your current idea (a prompt bar over three panes), redrawn in the brand colors with the three panes fading left to right.'],
+  ['../../icon.png', '', 'Current', 'The icon VibeDeck has now, for comparison.'],
+];
+document.getElementById('grid').innerHTML = C.map(([src, tag, name, text]) => `
+  <section class="c ${tag ? '' : 'cur'}">
+    <div class="top"><img class="big" src="${src}" alt="${name}"><div>${tag ? `<div class="tag">Option ${tag}</div>` : ''}<h2>${name}</h2><p>${text}</p></div></div>
+    <div class="sizes">${[128, 64, 48, 32, 24, 16].map(s => `<figure><img src="${src}" width="${s}" height="${s}" alt=""><figcaption>${s}</figcaption></figure>`).join('')}
+      <span style="flex:1"></span><div class="task"><img src="${src}" alt=""><b>VibeDeck</b></div></div>
+    <div class="lock"><div class="lu"><img src="${src}" alt=""><span>Vibe<i>Deck</i></span></div><div class="lu light"><img src="${src}" alt=""><span>Vibe<i>Deck</i></span></div></div>
+  </section>`).join('');
+</script>
+</body>
+</html>

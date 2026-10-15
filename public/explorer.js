@@ -369,6 +369,8 @@
   const setDockWidth = w => { dock.style.width = Math.max(320, Math.min(window.innerWidth * 0.6, w)) + 'px'; };
   setDockWidth(Number(load(DOCK_W)) || DOCK_DEFAULT);
 
+  window.vdLangOf = langOf;
+  window.vdOpenFile = (root, rel) => openFile(root, rel);
   function showDock(on) {
     dock.hidden = !on; $('dockResize').hidden = !on;
     setTimeout(fitAll, 30);

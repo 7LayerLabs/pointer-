@@ -1,6 +1,6 @@
 // App shell: page switching, the sidebar frame, status bar provider meters, and the "choose a folder" gate.
 (() => {
-  const VIEWS = { workbench: 'Workbench', pipelines: 'Pipelines', history: 'History', connections: 'Connections' };
+  const VIEWS = { workbench: 'Workbench', review: 'Review', pipelines: 'Pipelines', history: 'History', connections: 'Connections' };
   let current = 'workbench';
   let health = [];
 

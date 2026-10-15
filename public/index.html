@@ -13,12 +13,13 @@
   <!-- title bar: brand, view switch in the middle, workbench tools on the right -->
   <header class="titlebar" id="titlebar">
     <div class="tb-left">
-      <svg class="wordmark" viewBox="0 0 132 24" role="img" aria-label="VibeDeck"><rect x="0.6" y="2.6" width="13" height="18.8" rx="2.6" fill="#141821" stroke="#2c3240" stroke-width="1.2"/><path d="M3.8 9l2.6 2.4-2.6 2.4M8 15h3" stroke="#ffd400" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="15.6" y="5.2" width="6.4" height="16.2" rx="1.6" fill="#ffd400" transform="skewY(-8) translate(0 3)"/><text x="27" y="17.4" font-family="Inter,system-ui,sans-serif" font-size="15" font-weight="700" letter-spacing="-0.3" fill="#e8e9ed">Vibe<tspan fill="#8a8f9c">Deck</tspan></text></svg>
+      <svg class="wordmark" viewBox="0 0 132 24" role="img" aria-label="VibeDeck"><rect x="0.6" y="1.1" width="21.8" height="21.8" rx="5.6" fill="#15171d" stroke="#2c3240" stroke-width="1"/><g transform="translate(0 0.5) scale(0.08984)"><path fill="#eceef2" fill-rule="evenodd" d="M70 58h56a70 70 0 0 1 0 140H70zM100 88v80h26a40 40 0 0 0 0-80z"/><path d="M112 112l17 16-17 16" fill="none" stroke="#ffd400" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/></g><text x="29" y="17.4" font-family="Inter,system-ui,sans-serif" font-size="15" font-weight="700" letter-spacing="-0.3" fill="#e8e9ed">Vibe<tspan fill="#8a8f9c">Deck</tspan></text></svg>
       <button class="tb-btn" id="railToggle" title="Show or hide the sidebar (Ctrl+B)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></svg></button>
     </div>
     <nav class="modes" id="modes" aria-label="Views">
       <button class="nav mode" data-view="workbench"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/></svg><span class="lbl">Workbench</span></button>
       <button class="nav mode" data-view="pipelines"><svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M7.5 12h4M11.5 12c2 0 2-6 5-6M11.5 12c2 0 2 6 5 6"/></svg><span class="lbl">Pipelines</span><span class="cnt" id="navPipeCnt"></span></button>
+      <button class="nav mode" data-view="review" title="What the agents changed, with Keep, Undo and Rewind"><svg class="i" viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M12 7v4M10 9h4M10 16h4"/></svg><span class="lbl">Review</span><span class="cnt" id="navReviewCnt"></span></button>
       <button class="nav mode" data-view="history"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg><span class="lbl">History</span><span class="cnt" id="navHistCnt"></span></button>
     </nav>
     <div class="tb-right">
@@ -94,6 +95,7 @@
         </div>
       </section>
 
+      <section class="view" id="view-review" hidden></section>
       <section class="view page" id="view-pipelines" hidden></section>
       <section class="view page" id="view-history" hidden></section>
       <section class="view page" id="view-connections" hidden></section>
@@ -105,6 +107,7 @@
     <button class="sb-item" id="sbBranch" title="Git branch of the project folder" hidden><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="8" r="2.2"/><path d="M6 7.2v9.6M18 10.2c0 4-6 3-11 7"/></svg><span id="sbBranchName"></span><span class="sb-changes" id="sbChanges"></span></button>
     <span class="sb-item sb-path mono" id="crumbPath"></span>
     <span class="grow"></span>
+    <button class="sb-item sb-review" id="sbReview" hidden title="Open Review"><svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span id="sbReviewText"></span></button>
     <span class="sb-item" id="sbRound" hidden><span class="sb-pulse"></span><span id="sbRoundText">Answering</span></span>
     <div class="sb-provs" id="provList"></div>
     <button class="sb-item" id="helpBtn" title="Keyboard shortcuts"><svg class="i" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/></svg></button>
@@ -171,6 +174,9 @@
         <tr><td>Drag a file</td><td class="d">From the sidebar onto a pane: its path is typed into that CLI</td></tr>
         <tr><td>Right-click a file</td><td class="d">Open it, add it to the prompt, send it to a pane, copy its path</td></tr>
         <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">V</span> or drop</td><td class="d">Paste or drop an image onto a pane. Its file path is typed into that CLI.</td></tr>
+        <tr><td><span class="kbd">J</span> / <span class="kbd">K</span></td><td class="d">Review: next or previous change. Shift jumps by file.</td></tr>
+        <tr><td><span class="kbd">Y</span> / <span class="kbd">N</span></td><td class="d">Review: keep or undo the selected change</td></tr>
+        <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span></td><td class="d">Review: keep every change</td></tr>
         <tr><td>Drag a divider</td><td class="d">Resize panes, the sidebar or the file viewer. Double-click resets.</td></tr>
       </table>
     </div>
@@ -187,6 +193,8 @@
 <script src="/app.js"></script>
 <script src="/shell.js"></script>
 <script src="/explorer.js"></script>
+<script src="/linediff.js"></script>
+<script src="/review.js"></script>
 <script src="/history.js"></script>
 <script src="/pipeline.js"></script>
 <script src="/connections.js"></script>
