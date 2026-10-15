@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VibeDeck Mockups</title>
+<style>
+@font-face{font-family:Inter;src:url('../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2');font-weight:100 900}
+:root{--bg:#08090b;--card:#101115;--line:#1d1f25;--line2:#2b2e37;--text:#e8e9ed;--dim:#7f838e;--accent:#ffd400}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--text);font:14px/1.55 Inter,system-ui,sans-serif;padding:44px 32px 64px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1240px;margin:0 auto}
+.eyebrow{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:600}
+h1{font-size:30px;letter-spacing:-.025em;margin-top:4px}
+.lead{color:var(--dim);margin-top:8px;max-width:760px}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:30px}
+a.c{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;color:inherit;text-decoration:none;transition:border-color .15s,transform .15s}
+a.c:hover{border-color:var(--line2);transform:translateY(-2px)}
+.shot{aspect-ratio:16/10;background:#0b0c0f center/cover no-repeat;border-bottom:1px solid var(--line)}
+.body{padding:18px 18px 20px;display:flex;flex-direction:column;gap:8px}
+.tag{font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.06em}
+h2{font-size:19px;letter-spacing:-.01em}
+.body p{color:var(--dim);font-size:13.5px}
+ul{margin:4px 0 0 18px;color:#b3b6bf;font-size:13px}
+.open{margin-top:8px;font-weight:600;font-size:13px;color:var(--text)}
+.note{margin-top:28px;color:var(--dim);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+.note b{color:var(--text)}
+.feature{margin-top:28px}.feature a.c{flex-direction:row;border-color:rgba(255,212,0,.35)}.feature .shot{width:58%;aspect-ratio:16/10;border-bottom:0;border-right:1px solid var(--line);flex:none}.feature .body{justify-content:center;padding:28px}
+@media (max-width:980px){.feature a.c{flex-direction:column}.feature .shot{width:100%}}
+@media (max-width:980px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">VibeDeck, Phase 1 and 2</div>
+  <h1>Three directions</h1>
+  <p class="lead">Each one is fully clickable and uses the same fake project, so you are comparing the layout and feel, not the content. All three have folders and files on the left, a real editor with agent changes you can Keep or Undo, terminals, a live website preview, agents as tasks, merging an agent's copy back, comparing three agents' results, and a Ctrl+K command bar.</p>
+  <div class="feature"><a class="c d" href="d-combined.html"><div class="shot" style="background-image:url('shots/d.png')"></div><div class="body"><div class="tag">Option D, your mix</div><h2>Studio layout + themes</h2><p>The Studio layout with a real preview panel, Mission Control agent cards and Compare, and a Settings screen to switch between all three color schemes.</p><ul><li>Right panel: Agent, Preview, Changes, or Split to see two at once</li><li>Settings: Mission Control, Night Shift or Studio colors, plus spacing and code size (Ctrl+,)</li></ul><div class="open">Open the combined mockup</div></div></a></div>
+  <div class="grid">
+    <a class="c" href="a-workbench.html">
+      <div class="shot" style="background-image:url('shots/a.png')"></div>
+      <div class="body"><div class="tag">Option A</div><h2>Workbench</h2>
+        <p>Cursor-style. Today's graphite and yellow, grown into a full editor.</p>
+        <ul><li>Agents and files stacked on the left</li><li>Editor in the middle, terminals below</li><li>Preview, Changes and Git on the right</li></ul>
+        <div class="open">Open Workbench</div></div>
+    </a>
+    <a class="c" href="b-mission-control.html">
+      <div class="shot" style="background-image:url('shots/b.png')"></div>
+      <div class="body"><div class="tag">Option B</div><h2>Mission Control</h2>
+        <p>Orca-style. Agents come first: watch them, steer them, merge the winner.</p>
+        <ul><li>Agent cards grouped by "Needs you", "Working", "Done"</li><li>The selected agent's terminal is the main view</li><li>Comparing three agents' results is front and center</li></ul>
+        <div class="open">Open Mission Control</div></div>
+    </a>
+    <a class="c" href="c-studio.html">
+      <div class="shot" style="background-image:url('shots/c.png')"></div>
+      <div class="body"><div class="tag">Option C</div><h2>Studio</h2>
+        <p>Calm and editor-first, warmer colors. Agents talk to you in a side panel.</p>
+        <ul><li>Icon bar switches Files, Agents, Search, Git</li><li>Agent conversations read like chat, raw terminal one click away</li><li>Ctrl+K is the main way to do anything</li></ul>
+        <div class="open">Open Studio</div></div>
+    </a>
+  </div>
+  <p class="note"><b>Try in each one:</b> click a file marked M and Keep or Undo a change, press Ctrl+K, allow Grok's install, merge Codex's fix, open Compare, and hit Dark mode in the preview. You can also mix and match: for example, the Studio colors with the Mission Control agent cards.</p>
+</div>
+</body>
+</html>
