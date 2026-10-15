@@ -4,6 +4,8 @@ A local desktop workbench for AI coding tools. Run Claude Code, Codex and Grok s
 
 ## Run it
 
+Setting up on a new PC? Follow **[INSTALL.md](INSTALL.md)** for the full step-by-step guide.
+
 Install Node.js 22 or newer. On Windows, double-click `VibeDeck.bat` (it installs packages the first time). Or:
 
 ```sh
