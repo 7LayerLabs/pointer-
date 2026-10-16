@@ -25,7 +25,7 @@ function chipTitle(p) {
 }
 // a calm, low-glare palette: the CLIs' own colors read clearly without the stock neon
 const THEME = {
-  background: '#0b0c0f', foreground: '#d5d7de', cursor: '#ffd400', cursorAccent: '#0b0c0f',
+  background: '#0b0c0f', foreground: '#d5d7de', cursor: '#ffd400', cursorAccent: '#0b0c0f', overviewRulerBorder: '#0b0c0f',
   selectionBackground: '#ffd40033', selectionInactiveBackground: '#ffffff1a',
   black: '#17191f', red: '#ef7b73', green: '#8fd19e', yellow: '#e8c47c', blue: '#7fa6f5', magenta: '#c4a1f0', cyan: '#71c4d3', white: '#c9cbd3',
   brightBlack: '#5b5f6b', brightRed: '#ff968f', brightGreen: '#a9e2b6', brightYellow: '#f4d596', brightBlue: '#9dbcff', brightMagenta: '#d8bdff', brightCyan: '#90d8e5', brightWhite: '#f3f4f7',
@@ -224,19 +224,32 @@ function buildPane(info) {
     theme: THEME, fontSize: 12.5, lineHeight: 1.22,
     fontFamily: '"JetBrains Mono", "Cascadia Code", Consolas, monospace', fontWeight: 400, fontWeightBold: 600,
     cursorBlink: true, scrollback: 8000, allowProposedApi: true,
+    overviewRuler: { width: 8 }, // marks where your prompts are (prompt-marks.js)
+    linkHandler: { activate: (_e, uri) => openLink(uri) }, // links a CLI marks up itself (OSC 8)
   });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(el.querySelector('.term'));
   // WebGL renderer: the DOM renderer smears full-screen TUI redraws
   try { term.loadAddon(new WebglAddon.WebglAddon()); } catch (e) { console.warn('webgl unavailable', e); }
+  // web addresses in the output (http://localhost:3000 included) open in your browser on click
+  term.loadAddon(new WebLinksAddon.WebLinksAddon((_e, uri) => openLink(uri)));
   // fonts load after first paint; refit once they're in so cell sizes are right
   document.fonts?.ready.then(() => { try { fit.fit(); } catch {} });
   fit.fit();
-  term.onData(d => send({ type: 'input', pane: info.id, data: d }));
+  term.onData(d => { PromptMarks.typed(pane, d); send({ type: 'input', pane: info.id, data: d }); });
   term.textarea.addEventListener('focus', () => { document.querySelectorAll('.pane').forEach(p => p.classList.remove('focused')); el.classList.add('focused'); });
   term.textarea.addEventListener('blur', () => el.classList.remove('focused'));
   Object.assign(pane, { term, fit });
+  PromptMarks.attach(pane);
+  // Ctrl+V and Shift+Insert paste the clipboard like Windows Terminal does. xterm would otherwise send
+  // Ctrl+V to the CLI as a control character, so text pasted by Ctrl+V (and by dictation apps such as
+  // Wispr Flow, which paste with Ctrl+V) never arrived. Pasted images still go through sendImage below.
+  term.attachCustomKeyEventHandler(e => {
+    if (e.type === 'keydown' && !e.altKey && !e.metaKey
+      && ((e.ctrlKey && (e.key === 'v' || e.key === 'V')) || (e.shiftKey && !e.ctrlKey && e.key === 'Insert'))) return false;
+    return PromptMarks.key(pane, e);
+  });
   el.querySelector('.gate-focus').addEventListener('click', () => { el.classList.remove('gated'); term.focus(); });
 
   // model + effort chip: shows what this pane was launched with; the menu changes it
@@ -282,6 +295,15 @@ function buildPane(info) {
   el.querySelector('.dead-rs').addEventListener('click', () => send({ type: 'restart', pane: info.id }));
   panes.set(info.id, pane);
   relayout();
+}
+
+// web links only; anything else (file:, javascript:) is ignored. The desktop app hands them to the
+// default browser; in browser mode they open in a new tab.
+function openLink(uri) {
+  let u;
+  try { u = new URL(uri); } catch { return; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
+  window.open(u.href, '_blank', 'noopener');
 }
 
 function movePane(id, dir) {
@@ -371,6 +393,7 @@ window.addEventListener('resize', closeMenus);
 function removePane(id) {
   const p = panes.get(id);
   if (!p) return;
+  PromptMarks.detach(p);
   p.term?.dispose();
   p.el.remove();
   panes.delete(id);
@@ -535,6 +558,7 @@ ws.addEventListener('message', ev => {
     setCwd(msg.cwd || '', msg.recents || [], msg.needsFolder);
     setPlaybooks();
     if (!panes.size) msg.panes.forEach(p => buildPane(p));
+    PromptMarks.known(history.slice(-100).map(h => h.text));
     // a round still running when the page (re)loaded: keep its timers, dots and Stop button
     setRoundActive(!!msg.round);
     (msg.round?.targets || []).forEach(id => { const p = panes.get(id); if (p) { p.busySince = msg.round.ts; p.el.querySelector('.dot')?.classList.add('busy'); } });
@@ -605,6 +629,7 @@ ws.addEventListener('message', ev => {
     toast(msg.type === 'roundFailed' ? 'Some panes did not finish. Compare shows what came back.' : msg.count > 1 ? 'All answers are in. Open Compare to see them side by side.' : 'The answer is in.', 'check');
   } else if (msg.type === 'hist') {
     history.push(msg.item);
+    PromptMarks.sent(msg.item?.text);
   } else if (msg.type === 'round') {
     renderCompare(msg);
   } else if (msg.type === 'roundSaved') {
@@ -835,6 +860,7 @@ function broadcastPrompt() {
   const out = { type: 'broadcast', data: text, targets };
   if (text.startsWith(PROMOTE_HEAD)) out.noHist = true;
   send(out);
+  PromptMarks.sent(text);
   histIdx = -1;
   promptEl.value = '';
   sizePrompt();

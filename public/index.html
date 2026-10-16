@@ -31,6 +31,7 @@
       </div>
       <span class="tb-sep"></span>
       <button class="tb-btn" id="quickBtn" title="Go to file (Ctrl+P)"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
+      <button class="tb-btn" id="settingsBtn" title="Settings (Ctrl+,)"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
       <button class="tb-btn nav" data-view="connections" title="Connections and sign-in"><svg class="i" viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v4"/></svg></button>
     </div>
   </header>
@@ -170,6 +171,8 @@
         <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">B</span></td><td class="d">Show or hide the sidebar</td></tr>
         <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">0</span></td><td class="d">Jump back to the prompt</td></tr>
         <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">1</span> to <span class="kbd">5</span></td><td class="d">Focus pane 1 to 5</td></tr>
+        <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">Up</span> / <span class="kbd">Down</span></td><td class="d">Inside a pane: jump to your previous or next prompt</td></tr>
+        <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">,</span></td><td class="d">Settings, including the color your prompts are highlighted with</td></tr>
         <tr><td><span class="kbd">Esc</span></td><td class="d">Close a window here. Inside a pane it interrupts that CLI.</td></tr>
         <tr><td>Drag a file</td><td class="d">From the sidebar onto a pane: its path is typed into that CLI</td></tr>
         <tr><td>Right-click a file</td><td class="d">Open it, add it to the prompt, send it to a pane, copy its path</td></tr>
@@ -183,14 +186,52 @@
   </div>
 </div>
 
+<div class="overlay" id="settingsOverlay">
+  <div class="ov-card">
+    <div class="ov-head">
+      <h2><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</h2>
+      <span class="grow"></span>
+      <button class="btn sm" id="settingsClose">Close <span class="kbd">Esc</span></button>
+    </div>
+    <div class="set-body">
+      <div class="set-group">
+        <div class="eyebrow">Terminals</div>
+        <div class="set-row">
+          <div class="set-label">
+            <div class="set-name">Highlight my prompts</div>
+            <div class="set-help">Every question you send gets a colored band in the pane and a mark on its scrollbar, so you can scroll back to it and read down from there. <span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">Up</span> or <span class="kbd">Down</span> jumps between them.</div>
+          </div>
+        </div>
+        <div class="swatches" id="hlSwatches"></div>
+        <div class="set-row tight">
+          <div class="set-name sm">Strength</div>
+          <div class="seg" id="hlStrength"><button data-s="soft">Soft</button><button data-s="strong">Strong</button></div>
+        </div>
+        <div class="hl-preview mono" id="hlPreview">
+          <div class="pl dim">Claude Code v2 · Opus 5.5 · ~/code/my-app</div>
+          <div class="pl you"><span class="ptr">&gt;</span> why does the checkout page jump when the cart loads?</div>
+          <div class="pl">I'll look at the cart component and the checkout layout.</div>
+          <div class="pl dim">  Read src/cart/CartSummary.tsx</div>
+          <div class="pl">The summary renders before prices arrive, then grows by 48px.</div>
+          <div class="pl you"><span class="ptr">&gt;</span> fix it and keep the skeleton the same height</div>
+          <div class="pl">Done. The skeleton now reserves the final height.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="toasts"></div>
 <div id="reconnect"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>Lost the connection to the VibeDeck engine. Reconnecting.</div>
 
 <script src="/vendor/xterm/lib/xterm.js"></script>
 <script src="/vendor/addon-fit/lib/addon-fit.js"></script>
 <script src="/vendor/addon-webgl/lib/addon-webgl.js"></script>
+<script src="/vendor/addon-web-links/lib/addon-web-links.js"></script>
 <script src="/vendor/hljs/highlight.min.js"></script>
+<script src="/prompt-marks.js"></script>
 <script src="/app.js"></script>
+<script src="/settings.js"></script>
 <script src="/shell.js"></script>
 <script src="/explorer.js"></script>
 <script src="/linediff.js"></script>

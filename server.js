@@ -191,6 +191,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 app.use('/vendor/xterm', express.static(path.join(__dirname, 'node_modules', '@xterm', 'xterm')));
 app.use('/vendor/addon-fit', express.static(path.join(__dirname, 'node_modules', '@xterm', 'addon-fit')));
 app.use('/vendor/addon-webgl', express.static(path.join(__dirname, 'node_modules', '@xterm', 'addon-webgl')));
+app.use('/vendor/addon-web-links', express.static(path.join(__dirname, 'node_modules', '@xterm', 'addon-web-links')));
 app.use('/vendor/fonts', express.static(path.join(__dirname, 'node_modules', '@fontsource-variable', 'inter', 'files')));
 app.use('/vendor/fonts', express.static(path.join(__dirname, 'node_modules', '@fontsource-variable', 'jetbrains-mono', 'files')));
 

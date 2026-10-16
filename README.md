@@ -29,6 +29,9 @@ Pick a project folder. Terminals and pipelines only start inside a real project 
 - When a CLI is stuck on a question only you should answer (Claude's or Codex's folder-trust prompt, a Codex update prompt, a sign-in screen), a card over the pane says so and prompts wait until it's answered. VibeDeck never answers these for you.
 - Answers are read from each CLI's own conversation log (`~/.claude/projects`, `~/.codex/sessions`, `~/.grok/sessions`), not scraped from the terminal. That gives the exact text, the model that really wrote it, and a reliable "finished" signal for the round. Terminal scraping remains only as a fallback.
 - Compare shows every answer from the last round side by side, labeled with the model that wrote it. Pick a winner, continue from an answer, or ask a blind AI judge.
+- Your prompts are highlighted inside each pane (a colored band plus a mark on the pane's scrollbar), whether they came from the prompt box or were typed or pasted straight into the pane. Ctrl+Shift+Up and Ctrl+Shift+Down jump to the previous or next one. Pick the color, strength or Off in Settings (gear in the title bar, or Ctrl+,).
+- Ctrl+V and Shift+Insert paste into a pane the way Windows Terminal does, so dictation apps that paste with Ctrl+V (Wispr Flow and similar) type straight into the CLI. Pasted images are saved and their path is typed in.
+- Web links in a pane's output, including `http://localhost:...`, are underlined on hover and open in your default browser on click. Only http and https links open.
 - CLIs start with a clean environment: variables from a parent Claude Code session (`CLAUDECODE`, `CLAUDE_CODE_*`) and Electron's `ELECTRON_RUN_AS_NODE` are removed, so launching VibeDeck from inside Claude Code doesn't change how the panes behave.
 
 ## Review and checkpoints
@@ -66,6 +69,14 @@ Prompts go through stdin or a private temp file, never a shell. API stages recei
 ## Usage meters
 
 The sidebar shows a bar under each AI, and Connections shows every limit window with its reset time. The numbers come from the CLIs themselves: Claude from its own `/usage` report (a local command, no model call), Codex from the rate limits it records in its session logs, Grok from the usage files it writes per session. Grok reports no plan limit, so its bar compares today with the busiest day of the last week. Bars turn amber at 60% and red at 85%.
+
+The Token meter (gauge button in the top bar) shows today's tokens per AI and what they would cost at list prices (plans are flat, so this is value, not a bill). Claude counts helper-agent transcripts too and is priced per model; Codex counts only the part of a session used today; Grok uses its own per-turn usage records. To check it against an independent recount of the raw logs:
+
+```sh
+npm run meter:check                       # today
+npm run meter:check -- --date 2026-10-09  # a past day
+npm run meter:check -- --plan             # also print each CLI's own plan-limit report
+```
 
 ## Hands-free runs
 

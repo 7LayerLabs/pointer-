@@ -1,4 +1,4 @@
-const {app,BrowserWindow,dialog,session,safeStorage} = require('electron');
+const {app,BrowserWindow,dialog,session,safeStorage,shell} = require('electron');
 const fs=require('node:fs');
 const {fork,execFileSync} = require('node:child_process');
 const path=require('node:path');
@@ -52,7 +52,12 @@ app.whenReady().then(()=>{
       :{titleBarStyle:'hidden',titleBarOverlay:{color:'#08090b',symbolColor:'#9a9ea9',height:40}};
     window=new BrowserWindow({width:1440,height:960,minWidth:960,minHeight:640,title:'VibeDeck',backgroundColor:'#08090b',icon:path.join(app.getAppPath(),'icon.png'),show:false,...chrome,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}});
     window.removeMenu();
-    window.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+    // Links clicked in a terminal pane open in the default browser. Only web addresses, and never the
+    // engine's own address (it carries the session token). No window is ever opened inside the app.
+    window.webContents.setWindowOpenHandler(({url})=>{
+      try {const u=new URL(url);if((u.protocol==='http:'||u.protocol==='https:')&&u.origin!==origin)shell.openExternal(u.href);} catch {}
+      return {action:'deny'};
+    });
     window.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==origin)event.preventDefault();});
     window.once('ready-to-show',()=>window.show());
     window.loadURL(message.url);
