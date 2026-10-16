@@ -12,7 +12,7 @@ function hms(ms) {
 // checkbox state persists; ?show=claude+codex overrides on load
 const KEY = 'vibedeck-meter-picks';
 const qs = new URLSearchParams(location.search).get('show');
-let picks = qs ? qs.split(/[+,]/) : JSON.parse(localStorage.getItem(KEY) || '["claude","codex","grok"]');
+let picks = qs ? qs.split(/[+, ]+/) : JSON.parse(localStorage.getItem(KEY) || '["claude","codex","grok"]');
 document.querySelectorAll('#picks input').forEach(cb => {
   cb.checked = picks.includes(cb.dataset.k);
   cb.addEventListener('change', () => {
@@ -43,8 +43,9 @@ function draw() {
   if (!data) return;
   const now = Date.now();
   const cards = [];
-  const Z = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, cached: 0, estIn: 0, estOut: 0, estTokens: 0,
-              calls: 0, sessions: 0, messages: 0, cost: 0, models: [], planPct: null };
+  const Z = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0, cached: 0, calls: 0, sessions: 0, turns: 0,
+              cost: 0, models: [], unpriced: [], planPct: null };
+  const up = s => String(s || '').replace(/-/g, ' ').toUpperCase();
   if (picks.includes('claude')) {
     const s = data.claude.session || Z, day = data.claude.daily;
     const el = data.since.claude ? now - data.since.claude : 0;
@@ -52,7 +53,7 @@ function draw() {
     cards.push(`
       <div class="card" style="--accent:var(--claude)">
         <div class="head" style="color:var(--claude)"><span class="dot"></span>CLAUDE METER<span class="live">LIVE</span>
-          <span class="badge">${((s.models[0] || day.models[0])?.name || 'claude').toUpperCase()}</span></div>
+          <span class="badge">${up((s.models[0] || day.models[0])?.name || 'claude')}</span></div>
         <div class="big"><span class="cur">$</span><span class="num" data-oid="cl$"></span></div>
         <div class="sub">this session · <b>$${rate.toFixed(2)}/hr</b> · ${hms(el)} · <b>${s.calls}</b> calls</div>
         <div class="tiles">
@@ -64,7 +65,7 @@ function draw() {
         <div class="foot">${s.models.map(m =>
           `<span class="m">${m.name}</span> <span class="money">$${money(m.cost)}</span> <small>(${m.calls})</small>`).join(' · ') || (data.since.claude ? 'nothing this session yet' : 'no claude pane running')}</div>
         <div class="daily">today total <span class="money">$${money(day.cost)}</span> · ${day.calls} calls <small>(fleet incl.)</small></div>
-        <div class="note">api-rate value — Max plan is flat, not billed per token · session resets on pane restart</div>
+        <div class="note">value at Anthropic list prices; your Max plan is flat, not billed per token · session resets on pane restart${day.unpriced?.length ? ` · no list price for ${day.unpriced.join(', ')}, priced as Opus 5.5` : ''}</div>
       </div>`);
   }
   if (picks.includes('codex')) {
@@ -74,18 +75,20 @@ function draw() {
     cards.push(`
       <div class="card" style="--accent:var(--codex)">
         <div class="head" style="color:var(--codex)"><span class="dot"></span>CODEX METER<span class="live">LIVE</span>
-          <span class="badge">GPT-5.X</span></div>
+          <span class="badge">${up((s.models[0] || day.models[0]) || 'codex')}</span></div>
         <div class="big"><span class="cur">$</span><span class="num" data-oid="cx$"></span></div>
-        <div class="sub">this session · <b>$${rate.toFixed(2)}/hr</b> est · ${hms(el)}</div>
+        <div class="sub">this session · <b>$${rate.toFixed(2)}/hr</b> · ${hms(el)}</div>
         <div class="tiles">
           ${tile('output tokens', `<span data-oid="cxo"></span>`)}
           ${tile('input tokens', `<span data-oid="cxi"></span>`)}
           ${tile('cached input', fmt(s.cached))}
-          ${tile('plan used', day.planPct != null ? `${day.planPct}% <small>of ${day.planWindowDays}d</small>` : '—')}
+          ${tile('plan used', day.planPct != null ? `${day.planPct}% <small>of ${day.planWindowDays}d</small>` : 'n/a')}
         </div>
         ${day.planPct != null ? `<div class="planbar"><i style="width:${Math.min(100, day.planPct)}%"></i></div>` : ''}
+        ${Object.keys(s.byModel || {}).length ? `<div class="foot">${Object.values(s.byModel).sort((a, b) => b.cost - a.cost).map(m =>
+          `<span class="m">${m.name}</span> <span class="money">$${money(m.cost)}</span>`).join(' · ')}</div>` : ''}
         <div class="daily">today total <span class="money">$${money(day.cost)}</span> · ${day.sessions} sessions</div>
-        <div class="note">est api-rate — codex prices are estimates · session resets on pane restart</div>
+        <div class="note">value at OpenAI list prices (estimates); your plan is flat · session resets on pane restart${day.unpriced?.length ? ` · no list price for ${day.unpriced.join(', ')}, priced as GPT-6-Astra` : ''}</div>
       </div>`);
   }
   if (picks.includes('grok')) {
@@ -94,17 +97,17 @@ function draw() {
     cards.push(`
       <div class="card" style="--accent:var(--grok)">
         <div class="head" style="color:var(--grok)"><span class="dot"></span>GROK METER<span class="live">LIVE</span>
-          <span class="badge">GROK 4.5</span></div>
+          <span class="badge">${up((s.models[0] || day.models[0]) || 'grok')}</span></div>
         <div class="big"><span class="cur">$</span><span class="num" data-oid="gk$"></span></div>
-        <div class="sub">this session · <b>$${(el > 60000 ? s.cost / (el / 36e5) : 0).toFixed(2)}/hr</b> est · ${hms(el)}</div>
+        <div class="sub">this session · <b>$${(el > 60000 ? s.cost / (el / 36e5) : 0).toFixed(2)}/hr</b> · ${hms(el)}</div>
         <div class="tiles">
-          ${tile('output tokens', '~' + fmt(s.estOut))}
-          ${tile('input tokens', '~' + fmt(s.estIn))}
-          ${tile('messages', s.messages)}
-          ${tile('billing', '<small>flat sub</small>')}
+          ${tile('output tokens', (s.estimated ? '~' : '') + fmt(s.out))}
+          ${tile('input tokens', (s.estimated ? '~' : '') + fmt(s.in))}
+          ${tile('cached input', fmt(s.cached))}
+          ${tile('turns', s.turns)}
         </div>
-        <div class="daily">today total <span class="money">$${money(day.cost)}</span> · ${day.messages} msgs</div>
-        <div class="note">est api-rate — grok logs no token counts, char-based estimate · session resets on pane restart</div>
+        <div class="daily">today total <span class="money">$${money(day.cost)}</span> · ${day.turns} turns</div>
+        <div class="note">tokens and cost from Grok's own usage records${day.estimated ? '; older sessions without them are rough estimates (~)' : ''} · session resets on pane restart</div>
       </div>`);
   }
   $('#cards').innerHTML = cards.join('');
