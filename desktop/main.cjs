@@ -4,7 +4,7 @@ const {fork,execFileSync} = require('node:child_process');
 const path=require('node:path');
 let backend,window,quitting=false;
 if(!app.requestSingleInstanceLock())app.quit();
-app.on('second-instance',()=>{window?.show();window?.focus();});
+app.on('second-instance',()=>{if(window?.isMinimized())window.restore();window?.show();window?.focus();});
 app.whenReady().then(()=>{
   if(process.platform==='darwin'){
     try {process.env.PATH=execFileSync(process.env.SHELL||'/bin/zsh',['-ilc','printf "%s" "$PATH"'],{encoding:'utf8',timeout:5000}).trim();} catch {}

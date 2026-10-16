@@ -82,6 +82,8 @@ const folderName = dir => { const parts = String(dir || '').split(/[\\/]/).filte
 const promptEl = $('prompt'), panesEl = $('panes');
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function send(msg) { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); }
+// a prompt typed straight into a pane: the server watches for its answer (answer-marks.js)
+PromptMarks.onAsk = (p, text) => send({ type: 'asked', pane: p.id, text });
 function color(kind) { return COLORS[kind] || '#888'; }
 function kindName(kind) { return KIND_NAMES[kind] || kind; }
 function toast(text, icon, bad) {
@@ -242,6 +244,7 @@ function buildPane(info) {
   term.textarea.addEventListener('blur', () => el.classList.remove('focused'));
   Object.assign(pane, { term, fit });
   PromptMarks.attach(pane);
+  AnswerMarks.attach(pane);
   // Ctrl+V and Shift+Insert paste the clipboard like Windows Terminal does. xterm would otherwise send
   // Ctrl+V to the CLI as a control character, so text pasted by Ctrl+V (and by dictation apps such as
   // Wispr Flow, which paste with Ctrl+V) never arrived. Pasted images still go through sendImage below.
@@ -394,6 +397,7 @@ function removePane(id) {
   const p = panes.get(id);
   if (!p) return;
   PromptMarks.detach(p);
+  AnswerMarks.detach(p);
   p.term?.dispose();
   p.el.remove();
   panes.delete(id);
@@ -568,6 +572,10 @@ ws.addEventListener('message', ev => {
   } else if (msg.type === 'exit') {
     const p = panes.get(msg.pane);
     if (p) { p.dead = true; p.busySince = 0; p.el.classList.add('dead'); p.el.classList.remove('gated'); renderTargets(); }
+  } else if (msg.type === 'paneFinal') {
+    AnswerMarks.add(panes.get(msg.pane), msg);
+  } else if (msg.type === 'paneFinals') {
+    AnswerMarks.load(panes.get(msg.pane), msg.finals);
   } else if (msg.type === 'paneRan') {
     const p = panes.get(msg.pane);
     if (p) {
@@ -583,6 +591,7 @@ ws.addEventListener('message', ev => {
       p.dead = false; p.busySince = 0;
       p.el.classList.remove('dead', 'gated');
       p.term.reset();
+      AnswerMarks.reset(p);
       send({ type: 'resize', pane: p.id, cols: p.term.cols, rows: p.term.rows });
       renderTargets();
     }

@@ -11,8 +11,11 @@
   const panes = new Set();
 
   const keyOf = s => String(s || '').replace(/\s+/g, '');
-  const LEAD = /^[\s│┃║|▌▎▍>›❯»]+/, TRAIL = /[\s│┃║|]+$/;
-  const lineKey = line => line ? keyOf(line.translateToString(true).replace(LEAD, '').replace(TRAIL, '')) : '';
+  const LEAD = /^[\s│┃║|▌▎▍>›❯»]+/, TRAIL = /[\s│┃║|█▐▕▏░▒▓╎╏┆┇┊┋]+$/;
+  // Grok prints the time at the right end of each message's first line ("   12:31 PM"), and may
+  // draw a scrollbar in the last column
+  const CLOCK = /\s{2,}\d{1,2}:\d{2}(?::\d{2})?\s?(?:[AaPp][Mm])?\s*$/;
+  const lineKey = line => line ? keyOf(line.translateToString(true).replace(TRAIL, '').replace(CLOCK, '').replace(LEAD, '')) : '';
 
   function reindex() {
     byFirst = new Map();
@@ -153,7 +156,7 @@
     if (d[0] === '\x1b') { st.dirty = true; return; } // arrows and other keys: edits we can't follow
     for (const c of d) {
       if (c === '\r') {
-        if (st.buf.trim()) remember(st.buf);
+        if (st.buf.trim()) { remember(st.buf); if (!/^\s*\//.test(st.buf)) window.PromptMarks.onAsk?.(p, st.buf); } // not /commands
         st.buf = ''; st.dirty = false;
       } else if (c === '\x7f' || c === '\b') st.buf = st.buf.slice(0, -1);
       else if (c === '\x15' || c === '\x03') { st.buf = ''; st.dirty = false; }

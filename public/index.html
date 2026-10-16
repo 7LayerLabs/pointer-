@@ -217,6 +217,35 @@
           <div class="pl">Done. The skeleton now reserves the final height.</div>
         </div>
       </div>
+      <div class="set-group">
+        <div class="eyebrow">Answers</div>
+        <div class="set-row">
+          <div class="set-label">
+            <div class="set-name">Color the work and the summary</div>
+            <div class="set-help">While an AI works it shows its steps: files it read, commands it ran, notes on what it found. Then it ends with a summary. When each answer finishes, those two parts get their own look, so the summary is easy to spot when you scroll back. A pane looks as it does today until its answer is done.</div>
+          </div>
+        </div>
+        <div class="looks" id="acStyle"></div>
+        <div class="set-row tight">
+          <div class="set-name sm">Summary</div>
+        </div>
+        <div class="swatches" id="acSummary"></div>
+        <div class="set-row tight" id="acWorkHead">
+          <div class="set-name sm">Work</div>
+          <div class="set-help" id="acWorkNote"></div>
+        </div>
+        <div class="swatches" id="acWork"></div>
+        <div class="hl-preview ac-preview mono" id="acPreview">
+          <div class="pl you"><span class="ptr">&gt;</span> why does the checkout page jump when the cart loads?</div>
+          <div class="pl work">I'll check the cart component and the checkout layout.</div>
+          <div class="pl work"><span class="d">  Read</span> src/cart/CartSummary.tsx <span class="d">(84 lines)</span></div>
+          <div class="pl work"><span class="d">  Bash</span> npm test -- cart <span class="g">12 passed</span></div>
+          <div class="pl work">Found it. The summary draws before the prices arrive.</div>
+          <div class="pl sum">The page jumps because <span class="c">CartSummary.tsx</span> draws before prices</div>
+          <div class="pl sum">load, then grows by 48px. The skeleton now reserves the final</div>
+          <div class="pl sum">height, so nothing moves. All 12 cart tests pass.</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -230,6 +259,7 @@
 <script src="/vendor/addon-web-links/lib/addon-web-links.js"></script>
 <script src="/vendor/hljs/highlight.min.js"></script>
 <script src="/prompt-marks.js"></script>
+<script src="/answer-marks.js"></script>
 <script src="/app.js"></script>
 <script src="/settings.js"></script>
 <script src="/shell.js"></script>

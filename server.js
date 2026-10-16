@@ -527,6 +527,7 @@ function writePrompt(s, text) {
   const delay = text.includes('\n') ? Math.min(3000, 600 + text.split('\n').length * 25) : 150;
   setTimeout(() => { if (s.alive) s.proc.write('\r'); }, delay);
   s.promptWrittenAt = Date.now() + delay; // the round watcher re-presses Enter if the CLI never logged it
+  s.asked = { text, ts: Date.now() };
 }
 // flush queued prompts when their pane becomes ready. The 30s failsafe covers
 // panes that never go quiet (grok animates constantly) but must NOT fire while
@@ -728,7 +729,7 @@ async function updateModels() {
 }
 
 // ---------- answers: read from each CLI's own log, terminal scraping as the fallback ----------
-const { readAnswer, logPathFor, primeLogs } = require('./lib/transcripts');
+const { readAnswer, latestTurn, logPathFor, primeLogs } = require('./lib/transcripts');
 // log files already matched to other live Codex panes (two panes = two sessions)
 function claimedLogs(id, kind) {
   return [...sessions.entries()].filter(([oid, o]) => oid !== id && o.kind === kind && o.transcriptFile).map(([, o]) => o.transcriptFile);
@@ -759,6 +760,36 @@ function reportRanModel(id, s, ran) {
   if (mismatch) slog(`model mismatch on ${id}: launched with ${s.model}, CLI log says ${ran}`);
   broadcastWs({ type: 'paneRan', pane: id, ran, mismatch });
 }
+
+// Each pane's finished answers, for coloring the work and the summary (public/answer-marks.js).
+// Whenever a pane's own log grows, its newest turn is read; once the CLI records that turn as
+// finished, the pane is sent the prompt and the closing message. Prompts typed straight into a pane
+// count too: Claude and Grok panes know their log from launch, and a Codex pane's log is found by
+// the first prompt it was sent (typed prompts arrive as "asked").
+const FINALS_MAX = 30;
+function paneLog(s) { return (s.sessionId && logPathFor(s.kind, state.cwd, s.sessionId)) || s.transcriptFile || null; }
+setInterval(() => {
+  for (const [id, s] of sessions) {
+    if (!s.alive || !['claude', 'codex', 'grok'].includes(s.kind) || Date.now() - (s.finalCheck || 0) < 2500) continue;
+    // (a CLI logs a prompt the moment it is submitted, so a minute of tries is plenty)
+    if (!paneLog(s) && s.asked && (s.asked.tries = (s.asked.tries || 0) + 1) <= 24) { s.finalCheck = Date.now(); transcriptAnswer(id, s.asked.text, s.asked.ts); }
+    const file = paneLog(s);
+    let size;
+    try { size = fs.statSync(file).size; } catch { continue; }
+    if (size === s.finalSize) continue;
+    s.finalCheck = Date.now(); s.finalSize = size;
+    let found = null;
+    try { found = latestTurn(s.kind, file); } catch (e) { slog(`final read failed for ${id}: ${e.message}`); }
+    if (!found?.done || !found.final) continue;
+    const mark = { asked: String(found.asked || '').slice(0, 4000), final: found.final.slice(0, 24000) };
+    const key = mark.asked + '\u0000' + mark.final;
+    if (key === s.finalKey) continue;
+    s.finalKey = key;
+    (s.finals ||= []).push(mark);
+    if (s.finals.length > FINALS_MAX) s.finals.shift();
+    broadcastWs({ type: 'paneFinal', pane: id, ...mark });
+  }
+}, 1000);
 
 // What "-> notes", "-> sidecar" and relay send: the pane's latest answer, even if you kept
 // chatting in the pane after the last broadcast.
@@ -1069,6 +1100,7 @@ wss.on('connection', (ws) => {
   for (const [id, s] of sessions) {
     flushOut(id, s); // replay includes not-yet-flushed bytes — flush first so they aren't sent twice
     ws.send(JSON.stringify({ type: 'data', pane: id, data: s.buffer, replay: true }));
+    if (s.finals?.length) ws.send(JSON.stringify({ type: 'paneFinals', pane: id, finals: s.finals }));
     if (!s.alive) ws.send(JSON.stringify({ type: 'exit', pane: id, code: null }));
     else if (s.waiting) { const w = WAITING.find(x => x.title === s.waiting); if (w) ws.send(JSON.stringify({ type: 'paneWaiting', pane: id, title: w.title, reason: w.reason })); }
   }
@@ -1163,7 +1195,9 @@ wss.on('connection', (ws) => {
     // fire competing prompts at it. Typing into a pane stays allowed.
     if(customRunner.active && ['broadcast','relay','setcwd','replace'].includes(msg.type))return notice('A pipeline is running in this folder. Stop it or let it finish first.');
 
-    if (msg.type === 'input' && s && s.alive && s.proc) {
+    if (msg.type === 'asked' && s && typeof msg.text === 'string' && msg.text.trim()) {
+      s.asked = { text: msg.text.slice(0, 32000), ts: Date.now() }; // a prompt typed straight into the pane
+    } else if (msg.type === 'input' && s && s.alive && s.proc) {
       // Enter typed straight into an AI pane: snapshot too (at most every 20s), so Review covers it
       if (['claude', 'codex', 'grok'].includes(s.kind) && !s.inRound && typeof msg.data === 'string' && msg.data.includes('\r')
           && Date.now() - (s.lastTypedCp || 0) > 20000 && !questionOnScreen(s)) {

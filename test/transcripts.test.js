@@ -133,3 +133,37 @@ test('a log whose modified time never changes (Codex keeps it open on Windows) i
   const r=readAnswer({kind:'codex',cwd,prompt:PROMPT,sinceTs:now,home});
   assert.ok(r,'found despite the frozen modified time');assert.equal(r.text,'51');assert.equal(r.model,'gpt-6-sol');
 });
+
+// The closing summary (final) is what the panes color differently from the work before it.
+test('final is only the closing message, after the last tool call, for every CLI',t=>{
+  const {parseClaude,parseCodex,parseGrok,latestTurn}=require('../lib/transcripts');
+  const c=parseClaude([
+    {type:'user',message:{role:'user',content:'fix the jump'}},
+    {type:'assistant',message:{stop_reason:'tool_use',content:[{type:'text',text:'Let me look.'},{type:'tool_use',name:'Read',input:{}}]}},
+    {type:'user',message:{role:'user',content:[{type:'tool_result',content:'...'}]}},
+    {type:'assistant',message:{content:[{type:'text',text:'Fixed it.'}]}},
+    {type:'assistant',message:{stop_reason:'end_turn',content:[{type:'text',text:'Tests pass.'}]}},
+  ],'');
+  assert.equal(c.final,'Fixed it.\n\nTests pass.');assert.equal(c.asked,'fix the jump');assert.equal(c.done,true);
+  const x=parseCodex([
+    {type:'response_item',payload:{type:'message',role:'user',content:[{text:'fix the jump'}]}},
+    {type:'response_item',payload:{type:'message',role:'assistant',content:[{text:'Checking the cart.'}]}},
+    {type:'response_item',payload:{type:'function_call',name:'shell'}},
+    {type:'response_item',payload:{type:'message',role:'assistant',content:[{text:'Fixed.'}]}},
+  ],'',null);
+  assert.equal(x.final,'Fixed.');assert.equal(x.done,false);assert.equal(x.asked,'fix the jump');
+  const g=parseGrok([
+    {type:'user',content:[{type:'text',text:'<user_query>fix the jump</user_query>'}]},
+    {type:'assistant',content:'Looking.',tool_calls:[{id:1}]},
+    {type:'assistant',content:'All fixed.'},
+  ],'');
+  assert.equal(g.final,'All fixed.');assert.equal(g.asked,'fix the jump');assert.equal(g.done,true);
+  // a big log: the newest turn is read from the end of the file
+  const home=fakeHome(t),file=path.join(home,'big.jsonl');
+  const pad={type:'assistant',message:{content:[{type:'text',text:'x'.repeat(5000)}]}};
+  fs.writeFileSync(file,jsonl([...Array(300).fill(pad),
+    {type:'user',message:{role:'user',content:'second question'}},
+    {type:'assistant',message:{stop_reason:'end_turn',content:[{type:'text',text:'Second answer.'}]}}]));
+  const r=latestTurn('claude',file);
+  assert.equal(r.asked,'second question');assert.equal(r.final,'Second answer.');assert.equal(r.done,true);
+});

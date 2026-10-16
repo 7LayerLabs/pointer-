@@ -446,6 +446,32 @@ body.dragging-file .pane:not(.dropping) .term{opacity:.85}
 .hl-preview .pl.you{background:var(--hl-tint);box-shadow:inset 3px 0 0 var(--hl)}
 .hl-preview .ptr{color:var(--term-dim)}
 .hl-preview.none .pl.you{background:none;box-shadow:none;color:var(--term-text)}
+.set-group+.set-group{border-top:1px solid var(--border);padding-top:16px;margin-top:8px}
+/* answer looks: four cards, each a tiny drawing of a pane */
+.looks{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.look{display:flex;flex-direction:column;gap:8px;padding:9px 9px 8px;border:1px solid var(--border);border-radius:9px;background:var(--surface);cursor:pointer;text-align:left;transition:border-color .12s,background .12s}
+.look:hover{border-color:var(--border2);background:var(--surface2)}
+.look.on{border-color:var(--ac-sum,var(--border2));background:var(--surface2)}
+.look b{font-size:12px;font-weight:600;color:var(--text)}
+.look em{font-style:normal;font-size:11px;color:var(--dim);line-height:1.4}
+.look .mini{display:flex;flex-direction:column;gap:3px;padding:7px 6px;border-radius:6px;background:var(--term);border:1px solid var(--term-border)}
+.look .mini i{display:block;height:4px;border-radius:2px;background:#5b5f6b}
+.look .mini i.w{background:#c9cbd3}.look .mini i.s{background:#e6e8ee}
+.look .mini i:nth-child(2){width:80%}.look .mini i:nth-child(3){width:55%}.look .mini i:nth-child(4){width:70%}.look .mini i:nth-child(5){width:92%}.look .mini i:nth-child(6){width:64%}
+.look.fade .mini i.w{opacity:.35}
+.look.fade .mini i.s{outline:3px solid color-mix(in srgb,var(--ac-sum) 12%,transparent)}
+.look.card .mini i.s{outline:3px solid color-mix(in srgb,var(--ac-sum) 30%,transparent)}
+.look .mini i.y{background:var(--hl);opacity:.8}
+.look.two .mini i.w{background:var(--ac-work)}.look.two .mini i.s{background:var(--ac-sum)}
+.look.off .mini i.w,.look.off .mini i.s{background:#c9cbd3}
+.swatches.disabled{opacity:.45}
+#acWorkHead .set-help{margin:0}
+.hl-preview .d{color:var(--term-dim)}.hl-preview .c{color:#71c4d3}.hl-preview .g{color:#8fd19e}
+.ac-preview.fade .pl.work,.ac-preview.fade .pl.work *{color:#62666f}
+.ac-preview.fade .pl.sum,.ac-preview.card .pl.sum{background:var(--ac-tint)}
+.ac-preview.two .pl.work,.ac-preview.two .pl.work *{color:var(--ac-work)}
+.ac-preview.two .pl.sum,.ac-preview.two .pl.sum *{color:var(--ac-sum)}
+@media (max-width:560px){.looks{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 /* ---------- toasts + banner ---------- */
 #toasts{position:fixed;top:calc(var(--tb-h) + 12px);right:16px;z-index:70;display:flex;flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none}
